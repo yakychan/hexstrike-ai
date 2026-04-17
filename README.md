@@ -2,7 +2,7 @@
 
 <img src="assets/hexstrike-logo.png" alt="HexStrike AI Logo" width="220" style="margin-bottom: 20px;"/>
 
-# HexStrike AI MCP v7.0
+# HexStrike AI MCP v7.0 - Updated by Yakychan ;)
 ### AI-Powered Penetration Testing Automation Platform
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
