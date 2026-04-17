@@ -2,6 +2,8 @@
 
 <img src="assets/hexstrike-logo.png" alt="HexStrike AI Logo" width="220" style="margin-bottom: 20px;"/>
 
+#BETA VERSION, TEST AND COMMIT.
+
 # HexStrike AI MCP v7.0 - Updated by Yakychan ;)
 ### AI-Powered Penetration Testing Automation Platform
 
