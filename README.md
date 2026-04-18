@@ -308,6 +308,32 @@ Restart Windsurf → use Cascade (agent mode).
 
 ---
 
+### OpenCode
+
+[OpenCode](https://github.com/opencode-ai/opencode) is a terminal-based AI client. Add the MCP server to its config file (usually `~/.config/opencode/config.json`):
+
+```json
+{
+  "mcpServers": {
+    "hexstrike-ai": {
+      "command": "python3",
+      "args": [
+        "/ABSOLUTE/PATH/TO/hexstrike_mcp.py",
+        "--server",
+        "http://127.0.0.1:8888"
+      ],
+      "timeout": 600
+    }
+  }
+}
+```
+
+> **Note:** The timeout is set to 600 seconds because some scans (port scanning, fuzzing, exploitation) can take several minutes. Make sure `hexstrike_server.py` is running before starting OpenCode.
+
+Restart OpenCode — the `hexstrike-ai` tools will appear automatically.
+
+---
+
 ### Remote Server Setup
 
 If HexStrike runs on a remote Kali machine (VM, VPS, lab):
@@ -767,6 +793,52 @@ sudo systemctl status hexstrike
 
 Most tools are pre-installed on Kali Linux 2024+. For everything else:
 
+### Tool Checker & Installer (`check_tools.py`)
+
+`check_tools.py` scans your system for all 159 tools used by HexStrike and optionally installs the missing ones.
+
+**Check all tools:**
+```bash
+python3 check_tools.py
+```
+
+**Show only missing tools:**
+```bash
+python3 check_tools.py --missing-only
+```
+
+**Check a specific category:**
+```bash
+python3 check_tools.py --category "Web Application"
+```
+
+**Install missing tools automatically:**
+```bash
+# Preview what would be installed (no changes made)
+python3 check_tools.py --install --dry-run
+
+# Install with confirmation prompts
+python3 check_tools.py --install
+
+# Install without prompts (for scripts/automation)
+python3 check_tools.py --install --yes
+```
+
+**JSON output (for scripting):**
+```bash
+python3 check_tools.py --json
+python3 check_tools.py --missing-only --json | jq '.missing | keys'
+```
+
+**Cross-reference with running server:**
+```bash
+python3 check_tools.py --server http://127.0.0.1:8888
+```
+
+The script groups all `apt` packages into a single install command for efficiency, and handles pip3, Go, gem, and cargo packages separately. Tools that require manual steps (GUI installers, git clones) are reported with instructions rather than auto-installed.
+
+---
+
 ### ProjectDiscovery Toolkit
 
 ```bash
@@ -1003,10 +1075,16 @@ Notable endpoints: `/api/tools/nmap`, `/api/tools/nuclei`, `/api/tools/nuclei-up
 ### Tool not found errors
 
 ```bash
-# Check tool availability via status endpoint
+# Scan all 159 tools and show missing ones
+python3 check_tools.py --missing-only
+
+# Install missing tools automatically
+python3 check_tools.py --install --yes
+
+# Or check tool availability via the server status endpoint
 curl http://127.0.0.1:8888/api/tools/status | python3 -m json.tool
 
-# Or check specific tools
+# Check specific tools manually
 which gowitness git-dumper dalfox naabu nuclei certipy impacket-ntlmrelayx mitm6
 ```
 

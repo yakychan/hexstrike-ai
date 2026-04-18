@@ -306,6 +306,32 @@ Reiniciá Windsurf → usá Cascade (modo agente).
 
 ---
 
+### OpenCode
+
+[OpenCode](https://github.com/opencode-ai/opencode) es un cliente de IA para terminal. Agregá el servidor MCP a su archivo de configuración (normalmente `~/.config/opencode/config.json`):
+
+```json
+{
+  "mcpServers": {
+    "hexstrike-ai": {
+      "command": "python3",
+      "args": [
+        "/RUTA/ABSOLUTA/A/hexstrike_mcp.py",
+        "--server",
+        "http://127.0.0.1:8888"
+      ],
+      "timeout": 600
+    }
+  }
+}
+```
+
+> **Nota:** El timeout es 600 segundos porque algunos escaneos (puertos, fuzzing, explotación) pueden tardar varios minutos. Asegurate de que `hexstrike_server.py` esté corriendo antes de iniciar OpenCode.
+
+Reiniciá OpenCode — las herramientas `hexstrike-ai` aparecerán automáticamente.
+
+---
+
 ### Servidor Remoto
 
 Si HexStrike corre en una máquina Kali remota (VM, VPS, laboratorio):
@@ -766,6 +792,52 @@ sudo systemctl status hexstrike
 
 La mayoría están pre-instaladas en Kali Linux 2024+. Para el resto:
 
+### Verificador e instalador de herramientas (`check_tools.py`)
+
+`check_tools.py` escanea tu sistema en busca de las 159 herramientas que usa HexStrike e instala las que faltan.
+
+**Verificar todas las herramientas:**
+```bash
+python3 check_tools.py
+```
+
+**Mostrar solo las faltantes:**
+```bash
+python3 check_tools.py --missing-only
+```
+
+**Verificar una categoría específica:**
+```bash
+python3 check_tools.py --category "Web Application"
+```
+
+**Instalar herramientas faltantes automáticamente:**
+```bash
+# Vista previa sin cambios
+python3 check_tools.py --install --dry-run
+
+# Instalar con confirmación
+python3 check_tools.py --install
+
+# Instalar sin preguntar (para scripts/automatización)
+python3 check_tools.py --install --yes
+```
+
+**Salida en JSON (para scripting):**
+```bash
+python3 check_tools.py --json
+python3 check_tools.py --missing-only --json | jq '.missing | keys'
+```
+
+**Comparar con el servidor en ejecución:**
+```bash
+python3 check_tools.py --server http://127.0.0.1:8888
+```
+
+El script agrupa todos los paquetes `apt` en un solo comando para mayor eficiencia, y maneja pip3, Go, gem y cargo por separado. Las herramientas que requieren pasos manuales (instaladores GUI, git clones) se reportan con instrucciones en lugar de instalarse automáticamente.
+
+---
+
 ### ProjectDiscovery
 
 ```bash
@@ -1001,10 +1073,16 @@ Endpoints destacados: `/api/tools/nmap`, `/api/tools/nuclei`, `/api/tools/nuclei
 ### Errores de herramienta no encontrada
 
 ```bash
-# Verificar disponibilidad vía endpoint de status
+# Escanear las 159 herramientas y mostrar las faltantes
+python3 check_tools.py --missing-only
+
+# Instalar las herramientas faltantes automáticamente
+python3 check_tools.py --install --yes
+
+# O verificar disponibilidad vía endpoint de status del servidor
 curl http://127.0.0.1:8888/api/tools/status | python3 -m json.tool
 
-# Verificar herramientas específicas
+# Verificar herramientas específicas manualmente
 which gowitness git-dumper dalfox naabu nuclei certipy impacket-ntlmrelayx mitm6
 ```
 
