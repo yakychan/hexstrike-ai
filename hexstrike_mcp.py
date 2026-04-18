@@ -21,6 +21,7 @@ import sys
 import os
 import argparse
 import logging
+import uuid
 from typing import Dict, Any, Optional, List
 import requests
 import time
@@ -217,21 +218,28 @@ class HexStrikeClient:
             logger.error(f"💥 Unexpected error: {str(e)}")
             return {"error": f"Unexpected error: {str(e)}", "success": False}
 
+    # Endpoints that can run for minutes — route through async dispatch
+    _SLOW_PREFIXES = (
+        "api/tools/",
+        "api/intelligence/",
+        "api/bugbounty/",
+        "api/command",
+    )
+    # How long to wait inline before returning a task_id to the AI
+    _ASYNC_INLINE_TIMEOUT = 25  # seconds
+    _ASYNC_POLL_INTERVAL = 5    # seconds
+
     def safe_post(self, endpoint: str, json_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Perform a POST request with JSON data.
+        """POST request. Slow tool endpoints are dispatched async to avoid AI timeouts."""
+        if any(endpoint.startswith(p) for p in self._SLOW_PREFIXES):
+            return self._async_post(endpoint, json_data)
+        return self._raw_post(endpoint, json_data)
 
-        Args:
-            endpoint: API endpoint path (without leading slash)
-            json_data: JSON data to send
-
-        Returns:
-            Response data as dictionary
-        """
+    def _raw_post(self, endpoint: str, json_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Direct blocking POST (used for fast endpoints and fallback)."""
         url = f"{self.server_url}/{endpoint}"
-
         try:
-            logger.debug(f"📡 POST {url} with data: {json_data}")
+            logger.debug(f"📡 POST {url}")
             response = self.session.post(url, json=json_data, timeout=self.timeout)
             response.raise_for_status()
             return response.json()
@@ -241,6 +249,44 @@ class HexStrikeClient:
         except Exception as e:
             logger.error(f"💥 Unexpected error: {str(e)}")
             return {"error": f"Unexpected error: {str(e)}", "success": False}
+
+    def _async_post(self, endpoint: str, json_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit endpoint call async, poll inline up to _ASYNC_INLINE_TIMEOUT seconds.
+        If still running, returns task_id so the AI can call check_scan_result() later."""
+        submit_body = dict(json_data)
+        submit_body["_target"] = endpoint
+        submit = self._raw_post("api/async/run", submit_body)
+
+        if "error" in submit or "job_id" not in submit:
+            logger.warning(f"⚠️ Async submit failed for {endpoint}, falling back to sync")
+            return self._raw_post(endpoint, json_data)
+
+        job_id = submit["job_id"]
+        logger.info(f"⏳ Async job {job_id} submitted for {endpoint}")
+
+        elapsed = 0
+        while elapsed < self._ASYNC_INLINE_TIMEOUT:
+            time.sleep(self._ASYNC_POLL_INTERVAL)
+            elapsed += self._ASYNC_POLL_INTERVAL
+            poll = self.safe_get(f"api/async/result/{job_id}")
+            status = poll.get("status", "")
+            if status == "completed":
+                logger.info(f"✅ Job {job_id} done in {elapsed}s")
+                return poll.get("result") or {}
+            if status == "failed":
+                return {"error": poll.get("error", "Job failed"), "success": False}
+            logger.info(f"⏳ Job {job_id}: still running ({elapsed}s)")
+
+        # Tool is still running — return task_id so the AI can poll manually
+        logger.info(f"⏱️ Job {job_id} not done after {elapsed}s, returning task_id")
+        return {
+            "status": "running",
+            "task_id": job_id,
+            "message": (
+                f"The scan is still running (>{elapsed}s). "
+                f"Call check_scan_result(task_id='{job_id}') to retrieve results when ready."
+            ),
+        }
 
     def execute_command(self, command: str, use_cache: bool = True) -> Dict[str, Any]:
         """
@@ -7691,6 +7737,32 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
         data = {"mode": mode, "host": host, "port": port, "tunnels": tunnels, "additional_args": additional_args}
         logger.info(f"🔧 Chisel [{mode}]: {host}:{port}")
         return hexstrike_client.safe_post("api/tools/chisel", data)
+
+    @mcp.tool()
+    def check_scan_result(task_id: str) -> Dict[str, Any]:
+        """
+        Check the result of a long-running scan that was submitted asynchronously.
+
+        When a scan tool returns {"status": "running", "task_id": "..."} it means the tool
+        is still executing on the server. Call this function with the returned task_id to
+        retrieve the result once the scan completes. Call repeatedly until status is not "running".
+
+        Args:
+            task_id: The task_id returned by a previous scan tool call.
+
+        Returns:
+            {"status": "running"} if still in progress, or the full scan result when done.
+        """
+        poll = hexstrike_client.safe_get(f"api/async/result/{task_id}")
+        status = poll.get("status", "")
+        if status == "completed":
+            logger.info(f"✅ Job {task_id} completed")
+            return poll.get("result") or {}
+        if status == "failed":
+            return {"error": poll.get("error", "Job failed"), "success": False}
+        if status == "not_found":
+            return {"error": f"No job found with task_id '{task_id}'", "success": False}
+        return {"status": "running", "task_id": task_id, "message": "Scan still in progress. Call check_scan_result again shortly."}
 
     return mcp
 

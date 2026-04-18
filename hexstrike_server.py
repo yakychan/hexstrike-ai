@@ -21986,6 +21986,52 @@ def chisel_tunnel():
         return jsonify({"error": str(e)}), 500
 
 
+# ============================================================================
+# ASYNC JOB DISPATCH — lets the MCP client submit long-running tool calls
+# without blocking the MCP response and causing AI-side timeouts.
+# ============================================================================
+
+_async_jobs: Dict[str, Any] = {}
+_async_jobs_lock = threading.Lock()
+
+
+@app.route("/api/async/run", methods=["POST"])
+def async_run():
+    """Submit any POST endpoint call asynchronously. Returns job_id immediately."""
+    body = request.json or {}
+    target = body.pop("_target", "")
+    if not target:
+        return jsonify({"error": "_target endpoint required"}), 400
+
+    job_id = f"job_{uuid.uuid4().hex[:16]}"
+    with _async_jobs_lock:
+        _async_jobs[job_id] = {"status": "running", "started": time.time()}
+
+    def _run():
+        try:
+            with app.test_client() as c:
+                resp = c.post(f"/{target}", json=body, content_type="application/json")
+                data = resp.get_json()
+            with _async_jobs_lock:
+                _async_jobs[job_id].update({"status": "completed", "result": data, "finished": time.time()})
+        except Exception as exc:
+            with _async_jobs_lock:
+                _async_jobs[job_id].update({"status": "failed", "error": str(exc)})
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"job_id": job_id, "status": "submitted"})
+
+
+@app.route("/api/async/result/<job_id>", methods=["GET"])
+def async_result(job_id):
+    """Poll the result of an async job."""
+    with _async_jobs_lock:
+        job = dict(_async_jobs.get(job_id, {}))
+    if not job:
+        return jsonify({"error": "Job not found", "job_id": job_id}), 404
+    return jsonify(job)
+
+
 # Create the banner after all classes are defined
 BANNER = ModernVisualEngine.create_banner()
 
