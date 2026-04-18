@@ -21,7 +21,7 @@ import sys
 import os
 import argparse
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import requests
 import time
 from datetime import datetime
