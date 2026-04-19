@@ -311,7 +311,7 @@ Restart Windsurf → use Cascade (agent mode).
 
 ### OpenCode
 
-[OpenCode](https://github.com/opencode-ai/opencode) is a terminal-based AI client. Add the MCP server to its config file (usually `~/.config/opencode/config.json`):
+[OpenCode](https://github.com/opencode-ai/opencode) is a terminal-based AI client. Add the MCP server to its config file (usually `~/.config/opencode/config.json` or `/home/USERNAME/.config/opencode.json`):
 
 ```json
 {
@@ -324,6 +324,23 @@ Restart Windsurf → use Cascade (agent mode).
         "http://127.0.0.1:8888"
       ],
       "timeout": 600
+    }
+  }
+}
+```
+or
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "hexstrike": {
+      "type": "local",
+      "command": [
+        "python3",
+        "/home/tararira/Downloads/hexstrike-ai/hexstrike_mcp.py",
+        "--server",
+        "127.0.0.1:8888"
+      ]
     }
   }
 }
