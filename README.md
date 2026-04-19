@@ -337,7 +337,7 @@ or
       "type": "local",
       "command": [
         "python3",
-        "/home/tararira/Downloads/hexstrike-ai/hexstrike_mcp.py",
+        "/ABSOLUTE/PATH/TO/hexstrike_mcp.py",
         "--server",
         "127.0.0.1:8888"
       ]
