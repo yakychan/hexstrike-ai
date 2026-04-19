@@ -6692,6 +6692,167 @@ class CVEIntelligenceManager:
                 "sources_searched": []
             }
 
+    def lookup_service_cves(self, service: str, version: str) -> Dict[str, Any]:
+        """Query NVD and searchsploit for CVEs/exploits affecting a specific service+version."""
+        try:
+            keyword = f"{service} {version}".strip()
+            logger.info(f"🔍 CVE lookup: {keyword}")
+
+            cves_found = []
+
+            # ── NVD keyword search ─────────────────────────────────────────
+            try:
+                nvd_url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+                resp = requests.get(
+                    nvd_url,
+                    params={"keywordSearch": keyword, "resultsPerPage": 20},
+                    timeout=20
+                )
+                if resp.status_code == 200:
+                    for item in resp.json().get("vulnerabilities", []):
+                        cve = item.get("cve", {})
+                        cve_id = cve.get("id", "")
+                        descs = cve.get("descriptions", [])
+                        description = next((d["value"] for d in descs if d.get("lang") == "en"), "")
+                        metrics = cve.get("metrics", {})
+                        cvss_score, severity = 0.0, "UNKNOWN"
+                        for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+                            if metrics.get(key):
+                                d = metrics[key][0]["cvssData"]
+                                cvss_score = d.get("baseScore", 0.0)
+                                severity = d.get("baseSeverity", "UNKNOWN").upper()
+                                break
+                        refs = [r.get("url", "") for r in cve.get("references", [])[:3]]
+                        cves_found.append({
+                            "cve_id": cve_id,
+                            "description": description[:300],
+                            "cvss_score": cvss_score,
+                            "severity": severity,
+                            "source": "nvd",
+                            "references": refs
+                        })
+            except Exception as e:
+                logger.warning(f"⚠️ NVD lookup error for '{keyword}': {e}")
+
+            # ── searchsploit (offline ExploitDB) ──────────────────────────
+            searchsploit_results = []
+            try:
+                import subprocess
+                import json as _json
+                cmd = ["searchsploit", "--json", service]
+                if version:
+                    cmd.append(version)
+                sp = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if sp.returncode == 0 and sp.stdout:
+                    ss_data = _json.loads(sp.stdout)
+                    for exploit in ss_data.get("RESULTS_EXPLOIT", [])[:10]:
+                        searchsploit_results.append({
+                            "title": exploit.get("Title", ""),
+                            "edb_id": exploit.get("EDB-ID", ""),
+                            "date": exploit.get("Date", ""),
+                            "type": exploit.get("Type", ""),
+                            "platform": exploit.get("Platform", ""),
+                            "path": exploit.get("Path", "")
+                        })
+            except FileNotFoundError:
+                logger.debug("searchsploit not installed — skipping offline lookup")
+            except Exception as e:
+                logger.debug(f"searchsploit error: {e}")
+
+            return {
+                "success": True,
+                "service": service,
+                "version": version,
+                "keyword": keyword,
+                "cves": cves_found,
+                "searchsploit": searchsploit_results,
+                "total_cves": len(cves_found),
+                "total_exploits": len(searchsploit_results),
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"💥 lookup_service_cves error [{service} {version}]: {e}")
+            return {
+                "success": False,
+                "service": service,
+                "version": version,
+                "error": str(e),
+                "cves": [],
+                "searchsploit": []
+            }
+
+    def analyze_services_batch(self, services: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Run CVE/exploit lookup for every open service in an nmap-parsed services list.
+        Produces a consolidated report with per-service findings and a severity summary.
+        """
+        import time as _time
+
+        results = []
+        critical_count = high_count = medium_count = 0
+
+        open_services = [s for s in services if s.get("state") == "open" and s.get("service")]
+
+        for svc in open_services:
+            service_name = svc.get("service", "")
+            version_raw  = svc.get("version", "")
+            port         = svc.get("port", "")
+
+            # Extract first version token from nmap string
+            # e.g. "OpenSSH 8.9p1 Ubuntu 20.04" → "8.9p1"
+            version_token = ""
+            if version_raw:
+                for tok in version_raw.split():
+                    if any(c.isdigit() for c in tok):
+                        version_token = tok
+                        break
+
+            lookup = self.lookup_service_cves(service_name, version_token)
+
+            for cve in lookup.get("cves", []):
+                sev = cve.get("severity", "")
+                if sev == "CRITICAL":
+                    critical_count += 1
+                elif sev == "HIGH":
+                    high_count += 1
+                elif sev in ("MEDIUM", "MODERATE"):
+                    medium_count += 1
+
+            results.append({
+                "port":     port,
+                "protocol": svc.get("protocol", "tcp"),
+                "service":  service_name,
+                "version":  version_raw,
+                "lookup":   lookup
+            })
+
+            # NVD rate limit: 1 request per 6 s (no API key)
+            _time.sleep(6)
+
+        total_cves     = sum(r["lookup"].get("total_cves", 0)    for r in results)
+        total_exploits = sum(r["lookup"].get("total_exploits", 0) for r in results)
+
+        logger.info(
+            f"📊 Batch CVE scan: {len(results)} services | "
+            f"CVEs: {total_cves} | Exploits: {total_exploits} | "
+            f"Critical: {critical_count} | High: {high_count}"
+        )
+
+        return {
+            "success": True,
+            "services_analyzed": len(results),
+            "summary": {
+                "critical": critical_count,
+                "high": high_count,
+                "medium": medium_count,
+                "total_cves": total_cves,
+                "total_exploits": total_exploits
+            },
+            "findings": results,
+            "timestamp": datetime.now().isoformat()
+        }
+
 # Configure enhanced logging with colors
 class ColoredFormatter(logging.Formatter):
     """Custom formatter with colors and emojis"""
@@ -9785,7 +9946,7 @@ def create_vulnerability_card():
             return jsonify({"error": "No data provided"}), 400
 
         # Create vulnerability card
-        card = ModernVisualEngine.render_vulnerability_card(data)
+        card = CVEIntelligenceManager.render_vulnerability_card(data)
 
         return jsonify({
             "success": True,
@@ -9807,8 +9968,7 @@ def create_summary_report():
             return jsonify({"error": "No data provided"}), 400
 
         # Create summary report
-        visual_engine = ModernVisualEngine()
-        report = visual_engine.create_summary_report(data)
+        report = CVEIntelligenceManager.create_summary_report(data)
 
         return jsonify({
             "success": True,
@@ -16989,6 +17149,42 @@ def exploit_generate():
             "success": False,
             "error": f"Server error: {str(e)}"
         }), 500
+
+@app.route("/api/intelligence/service-cve-scan", methods=["POST"])
+@require_api_key
+def service_cve_scan():
+    """
+    Automated service → CVE/exploit pipeline.
+
+    Accepts either:
+      - services:    [{port, protocol, state, service, version}, ...]  (output of fast-scan)
+      - nmap_output: raw nmap -sV stdout string  (auto-parsed)
+
+    Queries NVD by keyword and searchsploit for every open service detected,
+    returning CVE list with CVSS scores and known public exploits.
+    """
+    try:
+        params = request.json or {}
+        services    = params.get("services")
+        nmap_output = params.get("nmap_output", "")
+
+        if not services and not nmap_output:
+            return jsonify({"error": "Provide 'services' list or 'nmap_output' string", "success": False}), 400
+
+        # Parse nmap stdout if a pre-built services list was not provided
+        if not services:
+            services = _parse_nmap_services(nmap_output)
+            if not services:
+                return jsonify({"error": "No services parsed from nmap_output", "success": False}), 400
+
+        logger.info(f"🔍 service-cve-scan: {len(services)} services to analyze")
+        result = cve_intelligence.analyze_services_batch(services)
+        return jsonify(result)
+
+    except Exception as e:
+        logger.error(f"💥 service-cve-scan error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route("/api/vuln-intel/attack-chains", methods=["POST"])
 def discover_attack_chains():

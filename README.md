@@ -12,9 +12,9 @@
 [![Security](https://img.shields.io/badge/Security-Penetration%20Testing-red.svg)](https://github.com/0x4m4/hexstrike-ai)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://github.com/0x4m4/hexstrike-ai)
 [![Version](https://img.shields.io/badge/Version-7.0.0-orange.svg)](https://github.com/0x4m4/hexstrike-ai/releases)
-[![Tools](https://img.shields.io/badge/Security%20Tools-240%2B-brightgreen.svg)](https://github.com/0x4m4/hexstrike-ai)
+[![Tools](https://img.shields.io/badge/Security%20Tools-159%2B-brightgreen.svg)](https://github.com/0x4m4/hexstrike-ai)
 
-**240+ security tools. Scope enforcement. HTML/PDF/SARIF reports. Active Directory module. NTLM relay. Visual recon. Metasploit RPC. Global Burp proxy. Real-time webhook alerts. Connects to Claude Code, VSCode, Cursor and any MCP-compatible AI.**
+**159+ security tools. Scope enforcement. HTML/PDF/SARIF reports. Active Directory module. NTLM relay. Visual recon. Metasploit RPC. Global Burp proxy. Automated CVE/exploit lookup per service. Real-time webhook alerts. Connects to Claude Code, VSCode, Cursor and any MCP-compatible AI.**
 
 [🚀 Quick Start](#quick-start) • [🔌 Connecting to AI Clients](#connecting-to-ai-clients) • [🛠️ Tools Reference](#tools-reference) • [📋 Workflow Examples](#workflow-examples) • [🔒 Security Configuration](#security-configuration)
 
@@ -26,7 +26,7 @@
 
 ## What is HexStrike AI?
 
-HexStrike AI is a **Model Context Protocol (MCP) server** that gives any AI assistant direct access to 240+ penetration testing tools. Instead of manually running tools from a terminal, you describe what you want to do and the AI orchestrates the entire process — including scope enforcement, finding persistence, report generation, and real-time notifications.
+HexStrike AI is a **Model Context Protocol (MCP) server** that gives any AI assistant direct access to 159+ penetration testing tools. Instead of manually running tools from a terminal, you describe what you want to do and the AI orchestrates the entire process — including scope enforcement, finding persistence, report generation, and real-time notifications.
 
 ```
 You: "Scan 192.168.1.0/24, find web services, route everything through Burp,
@@ -53,7 +53,7 @@ HexStrike: ✓ set_global_proxy("http://127.0.0.1:8080")  → Burp intercepts al
                    │ MCP Protocol (stdio)
 ┌──────────────────▼──────────────────────┐
 │         hexstrike_mcp.py                │  ← MCP Server (FastMCP)
-│         240 tool definitions            │
+│         MCP tool definitions            │
 └──────────────────┬──────────────────────┘
                    │ HTTP REST API
 ┌──────────────────▼──────────────────────┐
@@ -65,7 +65,7 @@ HexStrike: ✓ set_global_proxy("http://127.0.0.1:8080")  → Burp intercepts al
 └──────────────────┬──────────────────────┘
                    │ subprocess
 ┌──────────────────▼──────────────────────┐
-│         240+ External Tools             │
+│         159+ External Tools             │
 │  nmap · nuclei · dalfox · bloodhound    │
 │  impacket · certipy · frida · katana    │
 │  gowitness · git-dumper · mitm6 …       │
@@ -103,6 +103,7 @@ HexStrike: ✓ set_global_proxy("http://127.0.0.1:8080")  → Burp intercepts al
 | 📱 **Mobile security** | frida, objection, apktool, apkleaks, jadx |
 | ☁️ **Cloud** | cloudbrute, s3scanner, enumerate-iam |
 | 🔀 **Pivoting** | ligolo-ng, chisel |
+| 🔬 **Auto CVE lookup** | `auto_analyze_services_cve` — takes nmap output, queries NVD + searchsploit per service+version automatically |
 
 ---
 
@@ -183,7 +184,7 @@ Claude Code is the official Anthropic CLI — best supported integration.
 
 ```bash
 claude   # start Claude Code
-/mcp     # should list hexstrike-ai with 240 tools
+/mcp     # should list hexstrike-ai with 159+ tools
 ```
 
 **Step 3 — Test:**
@@ -588,6 +589,10 @@ uncover_search(query="apache port:8080 country:US", engine="shodan")
 ligolo_ng_tunnel(mode="proxy", listen_addr="0.0.0.0:11601")
 chisel_tunnel(mode="server", host="0.0.0.0", port="8080")
 
+# ── CVE Intelligence (automated) ───────────────────────────────────────────
+auto_analyze_services_cve(nmap_output="21/tcp open ftp vsftpd 2.3.4\n22/tcp open ssh OpenSSH 7.4")
+# Takes nmap -sV output → queries NVD + searchsploit per service → returns CVEs with CVSS + exploits
+
 # ── Webhooks ───────────────────────────────────────────────────────────────
 add_webhook(url, platform="slack", min_severity="high")
 list_webhooks()
@@ -726,6 +731,29 @@ HexStrike will:
 3. semgrep_sast_scan("/opt/project", config="p/owasp-top-ten")
 4. auto_import_findings("trufflehog", output)
 5. generate_html_report("/tmp/secrets_audit.html")
+```
+
+### CVE Auto-Analysis After Port Scan
+
+```
+You: Scan 10.10.10.5 and automatically find known CVEs and exploits for every service.
+
+HexStrike will:
+1. fast_scan_pipeline("10.10.10.5")               → discovers open ports + services
+   → "21/tcp open ftp vsftpd 2.3.4"
+   → "22/tcp open ssh OpenSSH 7.4"
+   → "80/tcp open http Apache httpd 2.4.49"
+2. auto_analyze_services_cve(nmap_output)          → queries NVD API + searchsploit
+   → Port 21 — vsftpd 2.3.4:
+       CVE-2011-2523  CVSS 10.0 CRITICAL  — backdoor command execution
+       searchsploit: "vsftpd 2.3.4 - Backdoor Command Execution"
+   → Port 22 — OpenSSH 7.4:
+       CVE-2018-15473  CVSS 5.3 MEDIUM  — username enumeration
+   → Port 80 — Apache 2.4.49:
+       CVE-2021-41773  CVSS 9.8 CRITICAL  — path traversal / RCE
+       searchsploit: "Apache 2.4.49 - Path Traversal"
+   Summary: 3 services | 4 CVEs | Critical: 2 | Exploits: 2
+3. add_finding_to_report(...)
 ```
 
 ### Mobile App Security
@@ -1016,6 +1044,12 @@ The Flask server exposes a REST API on `http://127.0.0.1:8888`. You can call it 
 | GET | `/api/reports/list-engagements` | — |
 | POST | `/api/reports/delete-engagement` | `{"name": "ClientX-2025"}` |
 | POST | `/api/reports/clear-findings` | — |
+
+### Intelligence
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/intelligence/service-cve-scan` | Automated service → CVE/exploit pipeline. Accepts `nmap_output` (raw nmap stdout) or `services` list |
 
 ### Workflows
 

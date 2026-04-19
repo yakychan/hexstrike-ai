@@ -10,9 +10,9 @@
 [![Security](https://img.shields.io/badge/Security-Penetration%20Testing-red.svg)](https://github.com/0x4m4/hexstrike-ai)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://github.com/0x4m4/hexstrike-ai)
 [![Version](https://img.shields.io/badge/Version-7.0.0-orange.svg)](https://github.com/0x4m4/hexstrike-ai/releases)
-[![Tools](https://img.shields.io/badge/Security%20Tools-240%2B-brightgreen.svg)](https://github.com/0x4m4/hexstrike-ai)
+[![Tools](https://img.shields.io/badge/Security%20Tools-159%2B-brightgreen.svg)](https://github.com/0x4m4/hexstrike-ai)
 
-**240+ herramientas de seguridad. Control de scope. Reportes HTML/PDF/SARIF. Módulo Active Directory. NTLM relay. Recon visual. Metasploit RPC. Proxy global Burp. Alertas webhook en tiempo real. Compatible con Claude Code, VSCode, Cursor y cualquier cliente MCP.**
+**159+ herramientas de seguridad. Control de scope. Reportes HTML/PDF/SARIF. Módulo Active Directory. NTLM relay. Recon visual. Metasploit RPC. Proxy global Burp. Búsqueda automática de CVEs/exploits por servicio. Alertas webhook en tiempo real. Compatible con Claude Code, VSCode, Cursor y cualquier cliente MCP.**
 
 [🚀 Inicio Rápido](#inicio-rápido) • [🔌 Conectar un cliente de IA](#conectar-un-cliente-de-ia) • [🛠️ Referencia de herramientas](#referencia-de-herramientas) • [📋 Ejemplos de flujo](#ejemplos-de-flujo) • [🔒 Configuración de seguridad](#configuración-de-seguridad)
 
@@ -24,7 +24,7 @@
 
 ## ¿Qué es HexStrike AI?
 
-HexStrike AI es un **servidor MCP (Model Context Protocol)** que le da a cualquier asistente de IA acceso directo a más de 240 herramientas de pentesting. En lugar de ejecutar herramientas manualmente desde la terminal, describís lo que querés hacer y la IA orquesta todo el proceso — incluyendo validación de scope, persistencia de hallazgos, generación de reportes y notificaciones en tiempo real.
+HexStrike AI es un **servidor MCP (Model Context Protocol)** que le da a cualquier asistente de IA acceso directo a más de 159 herramientas de pentesting. En lugar de ejecutar herramientas manualmente desde la terminal, describís lo que querés hacer y la IA orquesta todo el proceso — incluyendo validación de scope, persistencia de hallazgos, generación de reportes y notificaciones en tiempo real.
 
 ```
 Vos: "Escaneá 192.168.1.0/24, encontrá servicios web, ruteá todo por Burp,
@@ -51,7 +51,7 @@ HexStrike: ✓ set_global_proxy("http://127.0.0.1:8080")  → Burp intercepta to
                    │ Protocolo MCP (stdio)
 ┌──────────────────▼──────────────────────┐
 │         hexstrike_mcp.py                │  ← Servidor MCP (FastMCP)
-│         240 definiciones de tools       │
+│         Definiciones de tools MCP       │
 └──────────────────┬──────────────────────┘
                    │ API REST HTTP
 ┌──────────────────▼──────────────────────┐
@@ -63,7 +63,7 @@ HexStrike: ✓ set_global_proxy("http://127.0.0.1:8080")  → Burp intercepta to
 └──────────────────┬──────────────────────┘
                    │ subprocess
 ┌──────────────────▼──────────────────────┐
-│         240+ Herramientas externas      │
+│         159+ Herramientas externas      │
 │  nmap · nuclei · dalfox · bloodhound    │
 │  impacket · certipy · frida · katana    │
 │  gowitness · git-dumper · mitm6 …       │
@@ -101,6 +101,7 @@ HexStrike: ✓ set_global_proxy("http://127.0.0.1:8080")  → Burp intercepta to
 | 📱 **Seguridad mobile** | frida, objection, apktool, apkleaks, jadx |
 | ☁️ **Cloud** | cloudbrute, s3scanner, enumerate-iam |
 | 🔀 **Pivoting** | ligolo-ng, chisel |
+| 🔬 **CVE automático** | `auto_analyze_services_cve` — toma output de nmap, consulta NVD + searchsploit por servicio+versión automáticamente |
 
 ---
 
@@ -181,7 +182,7 @@ Claude Code es el CLI oficial de Anthropic — la integración mejor soportada.
 
 ```bash
 claude   # iniciá Claude Code
-/mcp     # debería listar hexstrike-ai con 240 tools
+/mcp     # debería listar hexstrike-ai con 159+ tools
 ```
 
 **Paso 3 — Probar:**
@@ -587,6 +588,10 @@ uncover_search(query="apache port:8080 country:US", engine="shodan")
 ligolo_ng_tunnel(mode="proxy", listen_addr="0.0.0.0:11601")
 chisel_tunnel(mode="server", host="0.0.0.0", port="8080")
 
+# ── Inteligencia CVE (automatizada) ────────────────────────────────────────
+auto_analyze_services_cve(nmap_output="21/tcp open ftp vsftpd 2.3.4\n22/tcp open ssh OpenSSH 7.4")
+# Toma output de nmap -sV → consulta NVD + searchsploit por servicio → devuelve CVEs con CVSS + exploits
+
 # ── Webhooks ───────────────────────────────────────────────────────────────
 add_webhook(url, platform="slack", min_severity="high")
 list_webhooks()
@@ -725,6 +730,29 @@ HexStrike hace:
 3. semgrep_sast_scan("/opt/proyecto", config="p/owasp-top-ten")
 4. auto_import_findings("trufflehog", output)
 5. generate_html_report("/tmp/auditoria_secrets.html")
+```
+
+### CVE Automático Después de un Scan de Puertos
+
+```
+Vos: Escaneá 10.10.10.5 y encontrá automáticamente CVEs y exploits para cada servicio.
+
+HexStrike hace:
+1. fast_scan_pipeline("10.10.10.5")               → descubre puertos y servicios
+   → "21/tcp open ftp vsftpd 2.3.4"
+   → "22/tcp open ssh OpenSSH 7.4"
+   → "80/tcp open http Apache httpd 2.4.49"
+2. auto_analyze_services_cve(nmap_output)          → consulta NVD + searchsploit
+   → Puerto 21 — vsftpd 2.3.4:
+       CVE-2011-2523  CVSS 10.0 CRÍTICO  — ejecución de comandos por backdoor
+       searchsploit: "vsftpd 2.3.4 - Backdoor Command Execution"
+   → Puerto 22 — OpenSSH 7.4:
+       CVE-2018-15473  CVSS 5.3 MEDIO  — enumeración de usuarios
+   → Puerto 80 — Apache 2.4.49:
+       CVE-2021-41773  CVSS 9.8 CRÍTICO  — path traversal / RCE
+       searchsploit: "Apache 2.4.49 - Path Traversal"
+   Resumen: 3 servicios | 4 CVEs | Críticos: 2 | Exploits: 2
+3. add_finding_to_report(...)
 ```
 
 ### Seguridad Mobile — APK
@@ -1014,6 +1042,12 @@ El servidor Flask expone una API REST en `http://127.0.0.1:8888`. Podés llamarl
 | GET | `/api/reports/list-engagements` | — |
 | POST | `/api/reports/delete-engagement` | `{"name": "ClienteX-2025"}` |
 | POST | `/api/reports/clear-findings` | — |
+
+### Inteligencia
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/intelligence/service-cve-scan` | Pipeline automático servicio → CVE/exploit. Acepta `nmap_output` (stdout raw de nmap) o lista `services` |
 
 ### Workflows
 

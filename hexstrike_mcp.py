@@ -4897,6 +4897,55 @@ def setup_mcp_server(hexstrike_client: HexStrikeClient) -> FastMCP:
         return result
 
     @mcp.tool()
+    def auto_analyze_services_cve(nmap_output: str = "", services_json: str = "") -> Dict[str, Any]:
+        """
+        Automatic CVE and exploit lookup for every service found in a port scan.
+
+        Takes nmap -sV output (or a JSON services list) and automatically queries NVD
+        and searchsploit for known CVEs and public exploits matching each service+version.
+        No manual CVE ID input needed — the pipeline runs end-to-end.
+
+        Args:
+            nmap_output:   Raw nmap stdout with service/version info.
+                           Example: "21/tcp open ftp vsftpd 2.3.4\\n22/tcp open ssh OpenSSH 7.4"
+            services_json: JSON array of services as an alternative to nmap_output.
+                           Format: '[{"port":21,"protocol":"tcp","state":"open","service":"ftp","version":"vsftpd 2.3.4"}]'
+
+        Returns:
+            Per-service CVE findings (CVE ID, CVSS score, severity, description, references)
+            plus searchsploit exploit entries, and a severity summary.
+
+        Example:
+            auto_analyze_services_cve(nmap_output="21/tcp open ftp vsftpd 2.3.4\\n22/tcp open ssh OpenSSH 7.4")
+        """
+        import json as _json
+
+        data: Dict[str, Any] = {}
+        if services_json:
+            try:
+                data["services"] = _json.loads(services_json)
+            except Exception:
+                return {"success": False, "error": "Invalid services_json — must be a valid JSON array"}
+        elif nmap_output:
+            data["nmap_output"] = nmap_output
+        else:
+            return {"success": False, "error": "Provide nmap_output or services_json"}
+
+        logger.info("🔍 Auto-analyzing discovered services for CVEs/exploits...")
+        result = hexstrike_client.safe_post("api/intelligence/service-cve-scan", data)
+
+        if result.get("success"):
+            summary  = result.get("summary", {})
+            findings = result.get("findings", [])
+            logger.info(
+                f"📊 {len(findings)} services scanned | "
+                f"Critical: {summary.get('critical', 0)} | High: {summary.get('high', 0)} | "
+                f"Total CVEs: {summary.get('total_cves', 0)} | Exploits: {summary.get('total_exploits', 0)}"
+            )
+
+        return result
+
+    @mcp.tool()
     def discover_attack_chains(target_software: str, attack_depth: int = 3, include_zero_days: bool = False) -> Dict[str, Any]:
         """
         Discover multi-stage attack chains for target software with vulnerability correlation.
