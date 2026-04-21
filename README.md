@@ -352,6 +352,31 @@ Restart OpenCode — the `hexstrike-ai` tools will appear automatically.
 
 ---
 
+### Zed
+
+[Zed](https://zed.dev) is a fast, native code editor with built-in MCP support.
+
+Open the Assistant Panel (`Ctrl+?`), click the MCP icon, select **Add MCP Server → Local**, and paste:
+
+```json
+{
+  "hexstrike_ai": {
+    "command": "python3",
+    "args": [
+      "/ABSOLUTE/PATH/TO/hexstrike_mcp.py",
+      "--server",
+      "http://127.0.0.1:8888"
+    ]
+  }
+}
+```
+
+Press `Ctrl+Enter` to confirm. Zed will connect to the MCP server automatically on next launch.
+
+> **Note:** Make sure `hexstrike_server.py` is running on port 8888 before starting Zed.
+
+---
+
 ### Remote Server Setup
 
 If HexStrike runs on a remote Kali machine (VM, VPS, lab):
