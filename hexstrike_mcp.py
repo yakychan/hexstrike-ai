@@ -142,7 +142,7 @@ logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_HEXSTRIKE_SERVER = "http://127.0.0.1:8888"  # Default HexStrike server URL
-DEFAULT_REQUEST_TIMEOUT = 300  # 5 minutes default timeout for API requests
+DEFAULT_REQUEST_TIMEOUT = 30   # 30s — fail fast so MCP doesn't timeout before requests do
 MAX_RETRIES = 3  # Maximum number of retries for connection attempts
 
 class HexStrikeClient:
@@ -226,7 +226,7 @@ class HexStrikeClient:
         "api/command",
     )
     # How long to wait inline before returning a task_id to the AI
-    _ASYNC_INLINE_TIMEOUT = 25  # seconds
+    _ASYNC_INLINE_TIMEOUT = 10  # seconds — return task_id quickly to avoid MCP -32001
     _ASYNC_POLL_INTERVAL = 5    # seconds
 
     def safe_post(self, endpoint: str, json_data: Dict[str, Any]) -> Dict[str, Any]:
